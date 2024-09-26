@@ -1,2 +1,1 @@
-Ucore
-# NKU--OS--Ucore
+# Ucore
