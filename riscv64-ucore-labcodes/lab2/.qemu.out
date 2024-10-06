@@ -20,20 +20,36 @@ Runtime SBI Version    : 0.1
 PMP0: 0x0000000080000000-0x000000008001ffff (A)
 PMP1: 0x0000000000000000-0xffffffffffffffff (A,R,W,X)
 (THU.CST) os is loading ...
-
-
 Special kernel symbols:
-  entry  0x000000008020000a (virtual)
-  etext  0x0000000080200a30 (virtual)
-  edata  0x0000000080204010 (virtual)
-  end    0x0000000080204028 (virtual)
-Kernel executable memory footprint: 17KB
-Exception type: breakpoint
-ebreak caught at 0x80200046 
-sbi_emulate_csr_read: hartid0: invalid csr_num=0x302
-Exception type:Illegal instruction
-Illegal instruction caught at 0x80200048 
+  entry  0xffffffffc0200032 (virtual)
+  etext  0xffffffffc02019ac (virtual)
+  edata  0xffffffffc0206010 (virtual)
+  end    0xffffffffc0206470 (virtual)
+Kernel executable memory footprint: 26KB
+memory management: best_fit_pmm_manager
+physcial memory map:
+  memory: 0x0000000007e00000, [0x0000000080200000, 0x0000000087ffffff].
+check_alloc_page() succeeded!
+satp virtual address: 0xffffffffc0205000
+satp physical address: 0x0000000080205000
 ++ setup timer interrupts
+100 ticks
+100 ticks
+100 ticks
+100 ticks
+100 ticks
+100 ticks
+100 ticks
+100 ticks
+100 ticks
+100 ticks
+100 ticks
+100 ticks
+100 ticks
+100 ticks
+100 ticks
+100 ticks
+100 ticks
 100 ticks
 100 ticks
 100 ticks

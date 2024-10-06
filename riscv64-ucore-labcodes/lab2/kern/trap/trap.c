@@ -22,7 +22,7 @@ static void print_ticks() {
 /* idt_init - initialize IDT to each of the entry points in kern/trap/vectors.S
  */
 void idt_init(void) {
-    /* LAB1 YOUR CODE : STEP 2 */
+    /* LAB1 YOUR CODE :2213050 STEP 2 */
     /* (1) Where are the entry addrs of each Interrupt Service Routine (ISR)?
      *     All ISR's entry addrs are stored in __vectors. where is uintptr_t
      * __vectors[] ?
@@ -125,6 +125,8 @@ void interrupt_handler(struct trapframe *tf) {
             // directly.
             // cprintf("Supervisor timer interrupt\n");
             // clear_csr(sip, SIP_STIP);
+            // "sip寄存器中除了SSIP和USIP之外的所有位都是只读的。" 
+	    // 实际上，调用sbi_set_timer函数将会清除STIP,或者你可以直接清除它。
             clock_set_next_event();
             if (++ticks % TICK_NUM == 0) {
                 print_ticks();

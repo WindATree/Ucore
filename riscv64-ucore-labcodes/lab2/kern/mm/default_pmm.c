@@ -92,6 +92,7 @@ default_init_memmap(struct Page *base, size_t n) {
     }
 }
 
+
 static struct Page *
 default_alloc_pages(size_t n) {
     assert(n > 0);
