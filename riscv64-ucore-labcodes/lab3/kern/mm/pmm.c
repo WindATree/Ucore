@@ -309,17 +309,17 @@ static inline void page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep) {
      *   PTE_P           0x001                   // page table/directory entry
      * flags bit : Present
      */
-    if (*ptep & PTE_V) {  //(1) check if this page table entry is
-        struct Page *page =
-            pte2page(*ptep);  //(2) find corresponding page to pte
-        page_ref_dec(page);   //(3) decrease page reference
-        if (page_ref(page) ==
-            0) {  //(4) and free this page when page reference reachs 0
-            free_page(page);
+    if (*ptep & PTE_V) { // 检查页表项是否有效
+        struct Page *page = pte2page(*ptep); // 获取对应的物理页面
+        page_ref_dec(page); // 减少页面引用计数
+        if (page_ref(page) == 0) { // 如果引用计数为0
+            free_page(page); // 释放这个页面
         }
-        *ptep = 0;                  //(5) clear second page table entry
-        tlb_invalidate(pgdir, la);  //(6) flush tlb
+        *ptep = 0; // 清除页表项
+        tlb_invalidate(pgdir, la); // 使TLB无效
     }
+
+    
 }
 
 // page_remove - free an Page which is related linear address la and has an
@@ -340,24 +340,25 @@ void page_remove(pde_t *pgdir, uintptr_t la) {
 // return value: always 0
 // note: PT is changed, so the TLB need to be invalidate
 int page_insert(pde_t *pgdir, struct Page *page, uintptr_t la, uint32_t perm) {
-    pte_t *ptep = get_pte(pgdir, la, 1);
+    pte_t *ptep = get_pte(pgdir, la, 1); // 获取页表项，如果不存在则创建
     if (ptep == NULL) {
-        return -E_NO_MEM;
+        return -E_NO_MEM; // 如果分配失败，返回内存错误
     }
-    page_ref_inc(page);
-    if (*ptep & PTE_V) {
-        struct Page *p = pte2page(*ptep);
-        if (p == page) {
-            page_ref_dec(page);
-        } else {
-            page_remove_pte(pgdir, la, ptep);
+    page_ref_inc(page); // 增加物理页面的引用计数
+
+    if (*ptep & PTE_V) { // 如果页表项已经有效
+        struct Page *p = pte2page(*ptep); // 获取当前映射的物理页面
+        if (p == page) { // 如果已经是正确的映射
+            page_ref_dec(page); // 引用计数减少（因为之前增加了一次）
+        } else { // 如果映射的是另一个页面
+            page_remove_pte(pgdir, la, ptep); // 删除旧的映射
         }
     }
-    *ptep = pte_create(page2ppn(page), PTE_V | perm);
-    tlb_invalidate(pgdir, la);
-    return 0;
-}
+    *ptep = pte_create(page2ppn(page), PTE_V | perm); // 设置新的页表项
+    tlb_invalidate(pgdir, la); // 使TLB无效，以确保CPU的缓存与新的页表项同步
 
+    return 0; // 成功返回
+}
 // invalidate a TLB entry, but only if the page tables being
 // edited are the ones currently in use by the processor.
 void tlb_invalidate(pde_t *pgdir, uintptr_t la) { flush_tlb(); }
@@ -390,7 +391,38 @@ static void check_alloc_page(void) {
     pmm_manager->check();
     cprintf("check_alloc_page() succeeded!\n");
 }
+/*
+这个函数check_pgdir用于验证页目录(boot_pgdir)的操作是否正确。它通过以下步骤进行验证：
 
+断言初始条件：确保内核的页数(npage)不超出内核空间大小，并且boot_pgdir不为NULL。
+
+分配物理页面：使用alloc_page分配两个物理页面(p1和p2)。
+
+页表映射：通过page_insert将p1映射到虚拟地址0x0。
+
+获取页表条目：使用get_pte获取虚拟地址0x0对应的页表条目(ptep)，并验证它是否正确指向p1。
+
+引用计数检查：使用page_ref检查p1的引用计数是否为1。
+
+页表条目遍历：通过直接访问地址获取PGSIZE对应的页表条目，并验证其正确性。
+
+映射第二个物理页面：将p2映射到PGSIZE虚拟地址，并设置用户(PTE_U)和写(PTE_W)权限。
+
+权限和引用计数验证：验证p2的页表条目权限，并检查p2的引用计数。
+
+页表映射替换：将p1重新映射到PGSIZE虚拟地址，验证引用计数变化。
+
+权限变更验证：验证p1映射后的权限变化。
+
+页面移除：使用page_remove移除0x0和PGSIZE的映射，并验证引用计数。
+
+页表清理：确保所有页面的引用计数为0。
+
+页目录清理：验证并清理boot_pgdir的第一条目。
+
+释放资源：释放分配的页目录页面，并清理boot_pgdir。
+
+打印成功信息：如果所有检查都通过，则打印成功信息。*/
 static void check_pgdir(void) {
     // assert(npage <= KMEMSIZE / PGSIZE);
     // The memory starts at 2GB in RISC-V

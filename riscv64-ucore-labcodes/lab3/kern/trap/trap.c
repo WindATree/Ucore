@@ -105,21 +105,22 @@ void print_regs(struct pushregs *gpr) {
     cprintf("  t6       0x%08x\n", gpr->t6);
 }
 
+
 static inline void print_pgfault(struct trapframe *tf) {
-    cprintf("page fault at 0x%08x: %c/%c\n", tf->badvaddr,
-            trap_in_kernel(tf) ? 'K' : 'U',
-            tf->cause == CAUSE_STORE_PAGE_FAULT ? 'W' : 'R');
+    cprintf("page fault at 0x%08x: %c/%c\n", tf->badvaddr, // 打印发生异常的虚拟地址
+            trap_in_kernel(tf) ? 'K' : 'U', // 打印发生异常的代码是在内核态还是用户态
+            tf->cause == CAUSE_STORE_PAGE_FAULT ? 'W' : 'R'); // 打印是读还是写操作导致的异常
 }
 
+// 缺页异常的处理函数
 static int pgfault_handler(struct trapframe *tf) {
-    extern struct mm_struct *check_mm_struct;
-    print_pgfault(tf);
-    if (check_mm_struct != NULL) {
-        return do_pgfault(check_mm_struct, tf->cause, tf->badvaddr);
+    extern struct mm_struct *check_mm_struct; // 外部定义的内存管理结构
+    print_pgfault(tf); // 打印缺页异常信息
+    if (check_mm_struct != NULL) { // 如果有有效的内存管理结构
+        return do_pgfault(check_mm_struct, tf->cause, tf->badvaddr); // 调用do_pgfault处理缺页异常
     }
-    panic("unhandled page fault.\n");
+    panic("unhandled page fault.\n"); // 如果没有有效的内存管理结构，触发panic
 }
-
 static volatile int in_swap_tick_event = 0;
 extern struct mm_struct *check_mm_struct;
 
