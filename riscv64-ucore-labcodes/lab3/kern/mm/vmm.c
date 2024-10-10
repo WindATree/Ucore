@@ -8,220 +8,255 @@
 #include <riscv.h>
 #include <swap.h>
 
-/* 
-  vmm design include two parts: mm_struct (mm) & vma_struct (vma)
-  mm is the memory manager for the set of continuous virtual memory  
-  area which have the same PDT. vma is a continuous virtual memory area.
-  There a linear link list for vma & a redblack link list for vma in mm.
----------------
-  mm related functions:
-   golbal functions
-     struct mm_struct * mm_create(void)
-     void mm_destroy(struct mm_struct *mm)
-     int do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr)
---------------
-  vma related functions:
-   global functions
-     struct vma_struct * vma_create (uintptr_t vm_start, uintptr_t vm_end,...)
-     void insert_vma_struct(struct mm_struct *mm, struct vma_struct *vma)
-     struct vma_struct * find_vma(struct mm_struct *mm, uintptr_t addr)
-   local functions
-     inline void check_vma_overlap(struct vma_struct *prev, struct vma_struct *next)
----------------
-   check correctness functions
-     void check_vmm(void);
-     void check_vma_struct(void);
-     void check_pgfault(void);
+/*
+  虚拟内存管理（VMM）设计包括两个部分：mm_struct（mm）和vma_struct（vma）
+  mm 是一组具有相同页目录表（PDT）的连续虚拟内存区域的内存管理器。
+  vma 是一个连续的虚拟内存区域。
+  在 mm 中，vma 有一个线性链表和一个红黑树链表。
+-----------------
+  与 mm 相关的函数：
+  全局函数
+    struct mm_struct * mm_create(void)
+    void mm_destroy(struct mm_struct *mm)
+    int do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr)
+-----------------
+  与 vma 相关的函数：
+  全局函数
+    struct vma_struct * vma_create (uintptr_t vm_start, uintptr_t vm_end, ...)
+    void insert_vma_struct(struct mm_struct *mm, struct vma_struct *vma)
+    struct vma_struct * find_vma(struct mm_struct *mm, uintptr_t addr)
+  局部函数
+    inline void check_vma_overlap(struct vma_struct *prev, struct vma_struct *next)
+-----------------
+  检查正确性的函数
+    void check_vmm(void);
+    void check_vma_struct(void);
+    void check_pgfault(void);
 */
 
-// szx func : print_vma and print_mm
+// szx 函数：print_vma 和 print_mm
 void print_vma(char *name, struct vma_struct *vma){
-	cprintf("-- %s print_vma --\n", name);
-	cprintf("   mm_struct: %p\n",vma->vm_mm);
-	cprintf("   vm_start,vm_end: %x,%x\n",vma->vm_start,vma->vm_end);
-	cprintf("   vm_flags: %x\n",vma->vm_flags);
-	cprintf("   list_entry_t: %p\n",&vma->list_link);
+    cprintf("-- %s print_vma --\n", name);
+    cprintf("   mm_struct: %p\n",vma->vm_mm);
+    cprintf("   vm_start,vm_end: %x,%x\n",vma->vm_start,vma->vm_end);
+    cprintf("   vm_flags: %x\n",vma->vm_flags);
+    cprintf("   list_entry_t: %p\n",&vma->list_link);
 }
 
 void print_mm(char *name, struct mm_struct *mm){
-	cprintf("-- %s print_mm --\n",name);
-	cprintf("   mmap_list: %p\n",&mm->mmap_list);
-	cprintf("   map_count: %d\n",mm->map_count);
-	list_entry_t *list = &mm->mmap_list;
-	for(int i=0;i<mm->map_count;i++){
-		list = list_next(list);
-		print_vma(name, le2vma(list,list_link));
-	}
+    cprintf("-- %s print_mm --\n",name);
+    cprintf("   mmap_list: %p\n",&mm->mmap_list);
+    cprintf("   map_count: %d\n",mm->map_count);
+    list_entry_t *list = &mm->mmap_list;
+    for(int i=0;i<mm->map_count;i++){
+        list = list_next(list);
+        print_vma(name, le2vma(list,list_link));
+    }
 }
 
 static void check_vmm(void);
 static void check_vma_struct(void);
 static void check_pgfault(void);
 
-// mm_create -  alloc a mm_struct & initialize it.
+// mm_create - 分配一个 mm_struct 并初始化它。
 struct mm_struct *
 mm_create(void) {
     struct mm_struct *mm = kmalloc(sizeof(struct mm_struct));
 
     if (mm != NULL) {
-        list_init(&(mm->mmap_list));
-        mm->mmap_cache = NULL;
-        mm->pgdir = NULL;
-        mm->map_count = 0;
+        list_init(&(mm->mmap_list)); // 初始化线性链表
+        mm->mmap_cache = NULL; // 初始化缓存指针
+        mm->pgdir = NULL; // 初始化页目录指针
+        mm->map_count = 0; // 初始化映射计数器
 
-        if (swap_init_ok) swap_init_mm(mm);
-        else mm->sm_priv = NULL;
+        if (swap_init_ok) swap_init_mm(mm); // 如果启用了交换空间，则初始化 mm 的交换空间
+        else mm->sm_priv = NULL; // 否则设置私有数据指针为 NULL
     }
     return mm;
 }
 
-// vma_create - alloc a vma_struct & initialize it. (addr range: vm_start~vm_end)
+// vma_create - 分配一个 vma_struct 并初始化它。（地址范围：vm_start~vm_end）
 struct vma_struct *
 vma_create(uintptr_t vm_start, uintptr_t vm_end, uint_t vm_flags) {
     struct vma_struct *vma = kmalloc(sizeof(struct vma_struct));
 
     if (vma != NULL) {
-        vma->vm_start = vm_start;
-        vma->vm_end = vm_end;
-        vma->vm_flags = vm_flags;
+        vma->vm_start = vm_start; // 设置起始地址
+        vma->vm_end = vm_end; // 设置结束地址
+        vma->vm_flags = vm_flags; // 设置标志
     }
     return vma;
 }
 
 
-// find_vma - find a vma  (vma->vm_start <= addr <= vma_vm_end)
+// find_vma - 查找一个 vma（vma->vm_start <= addr <= vma_vm_end）
 struct vma_struct *
 find_vma(struct mm_struct *mm, uintptr_t addr) {
     struct vma_struct *vma = NULL;
     if (mm != NULL) {
-        vma = mm->mmap_cache;
-        if (!(vma != NULL && vma->vm_start <= addr && vma->vm_end > addr)) {
+        vma = mm->mmap_cache; // 获取缓存的 vma
+        if (!(vma != NULL && vma->vm_start <= addr && vma->vm_end > addr)) { // 如果缓存的 vma 不包含地址
                 bool found = 0;
                 list_entry_t *list = &(mm->mmap_list), *le = list;
-                while ((le = list_next(le)) != list) {
+                while ((le = list_next(le)) != list) { // 遍历线性链表
                     vma = le2vma(le, list_link);
-                    if (vma->vm_start<=addr && addr < vma->vm_end) {
+                    if (vma->vm_start <= addr && addr < vma->vm_end) { // 如果找到包含地址的 vma
                         found = 1;
                         break;
                     }
                 }
                 if (!found) {
-                    vma = NULL;
+                    vma = NULL; // 如果没有找到，返回 NULL
                 }
         }
         if (vma != NULL) {
-            mm->mmap_cache = vma;
+            mm->mmap_cache = vma; // 更新缓存的 vma
         }
     }
     return vma;
 }
 
 
-// check_vma_overlap - check if vma1 overlaps vma2 ?
+// check_vma_overlap - 检查 vma1 是否与 vma2 重叠？
 static inline void
 check_vma_overlap(struct vma_struct *prev, struct vma_struct *next) {
-    assert(prev->vm_start < prev->vm_end);
-    assert(prev->vm_end <= next->vm_start);
-    assert(next->vm_start < next->vm_end);
+    assert(prev->vm_start < prev->vm_end); // 断言 prev 的起始地址小于结束地址
+    assert(prev->vm_end <= next->vm_start); // 断言 prev 的结束地址小于等于 next 的起始地址
+    assert(next->vm_start < next->vm_end); // 断言 next 的起始地址小于结束地址
 }
 
 
-// insert_vma_struct -insert vma in mm's list link
+// insert_vma_struct - 在 mm 的列表链接中插入 vma
 void
 insert_vma_struct(struct mm_struct *mm, struct vma_struct *vma) {
+    // 确保 vma 的起始地址小于结束地址
     assert(vma->vm_start < vma->vm_end);
+    
+    // 获取 mm 的映射列表的头节点
     list_entry_t *list = &(mm->mmap_list);
+    // 初始化 le_prev 为头节点，用于追踪当前遍历到的节点的前一个节点
     list_entry_t *le_prev = list, *le_next;
-
-        list_entry_t *le = list;
-        while ((le = list_next(le)) != list) {
-            struct vma_struct *mmap_prev = le2vma(le, list_link);
-            if (mmap_prev->vm_start > vma->vm_start) {
-                break;
-            }
-            le_prev = le;
+    
+    // 遍历 mm 的映射列表，找到应该插入 vma 的位置
+    list_entry_t *le = list;
+    while ((le = list_next(le)) != list) {
+        struct vma_struct *mmap_prev = le2vma(le, list_link);
+        // 如果当前遍历到的 vma 的起始地址大于要插入的 vma 的起始地址，则停止遍历
+        if (mmap_prev->vm_start > vma->vm_start) {
+            break;
         }
-
+        le_prev = le; // 更新前一个节点
+    }
+    
+    // 获取 le_prev 的下一个节点，即插入位置的后一个节点
     le_next = list_next(le_prev);
-
-    /* check overlap */
+    
+    // 检查重叠
+    // 如果前一个节点不是头节点，检查与前一个 vma 是否重叠
     if (le_prev != list) {
         check_vma_overlap(le2vma(le_prev, list_link), vma);
     }
+    // 如果后一个节点不是头节点，检查与后一个 vma 是否重叠
     if (le_next != list) {
         check_vma_overlap(vma, le2vma(le_next, list_link));
     }
-
+    
+    // 设置 vma 的 mm 指针，表示 vma 属于这个 mm
     vma->vm_mm = mm;
+    // 在 le_prev 之后插入 vma
     list_add_after(le_prev, &(vma->list_link));
-
+    
+    // 更新 mm 中的映射计数器
     mm->map_count ++;
 }
 
-// mm_destroy - free mm and mm internal fields
+// mm_destroy - 释放 mm 及其内部字段
 void
 mm_destroy(struct mm_struct *mm) {
-
+    // 获取 mm 的映射列表的头节点
     list_entry_t *list = &(mm->mmap_list), *le;
+    // 遍历映射列表，释放每一个 vma
     while ((le = list_next(list)) != list) {
-        list_del(le);
-        kfree(le2vma(le, list_link),sizeof(struct vma_struct));  //kfree vma        
+        list_del(le); // 从列表中删除当前节点
+        // 释放 vma 所占用的内存
+        kfree(le2vma(le, list_link),sizeof(struct vma_struct));  
     }
-    kfree(mm, sizeof(struct mm_struct)); //kfree mm
+    // 释放 mm 所占用的内存
+    kfree(mm, sizeof(struct mm_struct)); 
+    // 将 mm 设置为 NULL，防止产生野指针
     mm=NULL;
 }
 
-// vmm_init - initialize virtual memory management
-//          - now just call check_vmm to check correctness of vmm
+// vmm_init - 初始化虚拟内存管理
+//          - 目前只是调用 check_vmm 来检查 vmm 的正确性
 void
 vmm_init(void) {
     check_vmm();
 }
 
-// check_vmm - check correctness of vmm
+// check_vmm - 检查 vmm 的正确性
 static void
 check_vmm(void) {
+    // 存储当前的空闲页面数
     size_t nr_free_pages_store = nr_free_pages();
+    // 检查 vma 结构的正确性
     check_vma_struct();
+    // 检查缺页处理的正确性
     check_pgfault();
 
-    nr_free_pages_store--;	// szx : Sv39三级页表多占一个内存页，所以执行此操作
+    // Szx: Sv39 三级页表多占用一个内存页，因此执行此操作
+    nr_free_pages_store--;	
+    // 断言空闲页面数没有变化，确保上面的操作没有影响内存分配
     assert(nr_free_pages_store == nr_free_pages());
 
+    // 打印检查成功的消息
     cprintf("check_vmm() succeeded.\n");
 }
 
 static void
 check_vma_struct(void) {
+    // 存储当前的空闲页面数
     size_t nr_free_pages_store = nr_free_pages();
 
+    // 创建一个新的 mm 结构体实例
     struct mm_struct *mm = mm_create();
+    // 断言 mm 创建成功
     assert(mm != NULL);
 
+    // 定义步长，用于创建测试用的 vma
     int step1 = 10, step2 = step1 * 10;
 
     int i;
+    // 从后向前创建并插入 vma
     for (i = step1; i >= 1; i --) {
         struct vma_struct *vma = vma_create(i * 5, i * 5 + 2, 0);
+        // 断言 vma 创建成功
         assert(vma != NULL);
+        // 将 vma 插入到 mm 的映射列表中
         insert_vma_struct(mm, vma);
     }
 
+    // 从前向后创建并插入 vma
     for (i = step1 + 1; i <= step2; i ++) {
         struct vma_struct *vma = vma_create(i * 5, i * 5 + 2, 0);
+        // 断言 vma 创建成功
         assert(vma != NULL);
+        // 将 vma 插入到 mm 的映射列表中
         insert_vma_struct(mm, vma);
     }
 
+    // 遍历 mm 的映射列表，检查 vma 的顺序和属性
     list_entry_t *le = list_next(&(mm->mmap_list));
-
     for (i = 1; i <= step2; i ++) {
+        // 断言当前节点不是头节点
         assert(le != &(mm->mmap_list));
         struct vma_struct *mmap = le2vma(le, list_link);
+        // 断言 vma 的起始地址和结束地址正确
         assert(mmap->vm_start == i * 5 && mmap->vm_end == i * 5 + 2);
         le = list_next(le);
     }
 
+    // 检查 find_vma 函数的正确性
     for (i = 5; i <= 5 * step2; i +=5) {
         struct vma_struct *vma1 = find_vma(mm, i);
         assert(vma1 != NULL);
@@ -238,6 +273,7 @@ check_vma_struct(void) {
         assert(vma2->vm_start == i  && vma2->vm_end == i  + 2);
     }
 
+    // 检查 find_vma 函数在边界情况下的正确性
     for (i =4; i>=0; i--) {
         struct vma_struct *vma_below_5= find_vma(mm,i);
         if (vma_below_5 != NULL ) {
@@ -246,37 +282,48 @@ check_vma_struct(void) {
         assert(vma_below_5 == NULL);
     }
 
+    // 释放 mm 及其所有 vma
     mm_destroy(mm);
 
+    // 断言空闲页面数没有变化，确保上面的操作没有影响内存分配
     assert(nr_free_pages_store == nr_free_pages());
 
+    // 打印检查成功的消息
     cprintf("check_vma_struct() succeeded!\n");
 }
 
 struct mm_struct *check_mm_struct;
 
-// check_pgfault - check correctness of pgfault handler
+// check_pgfault - 检查缺页处理程序的正确性
 static void
 check_pgfault(void) {
-	// char *name = "check_pgfault";
+    // 存储当前的空闲页面数
     size_t nr_free_pages_store = nr_free_pages();
 
+    // 创建一个新的内存管理结构体实例
     check_mm_struct = mm_create();
-
+    // 断言内存管理结构体创建成功
     assert(check_mm_struct != NULL);
     struct mm_struct *mm = check_mm_struct;
+    // 为 mm 分配页目录，并将其设置为启动时的页目录
     pde_t *pgdir = mm->pgdir = boot_pgdir;
+    // 断言页目录的第一个条目是空的
     assert(pgdir[0] == 0);
 
+    // 创建一个新的虚拟内存区域结构体实例，表示从地址0开始的4KB内存区域，具有写权限
     struct vma_struct *vma = vma_create(0, PTSIZE, VM_WRITE);
-
+    // 断言虚拟内存区域结构体创建成功
     assert(vma != NULL);
 
+    // 将虚拟内存区域结构体插入到内存管理结构体的映射列表中
     insert_vma_struct(mm, vma);
 
+    // 定义一个测试地址
     uintptr_t addr = 0x100;
+    // 断言找到的虚拟内存区域是预期的区域
     assert(find_vma(mm, addr) == vma);
 
+    // 测试写入和读取内存
     int i, sum = 0;
     for (i = 0; i < 100; i ++) {
         *(char *)(addr + i) = i;
@@ -285,66 +332,71 @@ check_pgfault(void) {
     for (i = 0; i < 100; i ++) {
         sum -= *(char *)(addr + i);
     }
+    // 断言读取和写入操作是正确的
     assert(sum == 0);
 
+    // 从页目录中移除页面
     page_remove(pgdir, ROUNDDOWN(addr, PGSIZE));
 
+    // 释放页目录中的第一个页表页面
     free_page(pde2page(pgdir[0]));
 
+    // 将页目录的第一个条目设置为0
     pgdir[0] = 0;
 
+    // 将内存管理结构体的页目录指针设置为NULL
     mm->pgdir = NULL;
+    // 销毁内存管理结构体
     mm_destroy(mm);
 
+    // 将检查用的内存管理结构体指针设置为NULL
     check_mm_struct = NULL;
-    nr_free_pages_store--;	// szx : Sv39第二级页表多占了一个内存页，所以执行此操作
+    // Szx: Sv39第二级页表多占用了一个内存页，因此执行此操作
+    nr_free_pages_store--;
 
+    // 断言空闲页面数没有变化，确保上面的操作没有影响内存分配
     assert(nr_free_pages_store == nr_free_pages());
 
+    // 打印检查成功的消息
     cprintf("check_pgfault() succeeded!\n");
 }
-//page fault number
+
+// 缺页次数计数器
 volatile unsigned int pgfault_num=0;
 
-/* do_pgfault - interrupt handler to process the page fault execption
- * @mm         : the control struct for a set of vma using the same PDT
- * @error_code : the error code recorded in trapframe->tf_err which is setted by x86 hardware
- * @addr       : the addr which causes a memory access exception, (the contents of the CR2 register)
+/* do_pgfault - 处理缺页异常的中断处理程序
+ * @mm         : 使用相同页目录表的一组 vma 的控制结构
+ * @error_code : 由 x86 硬件设置在 trapframe->tf_err 中记录的错误码
+ * @addr       : 导致内存访问异常的地址（CR2 寄存器的内容）
  *
- * CALL GRAPH: trap--> trap_dispatch-->pgfault_handler-->do_pgfault
- * The processor provides ucore's do_pgfault function with two items of information to aid in diagnosing
- * the exception and recovering from it.
- *   (1) The contents of the CR2 register. The processor loads the CR2 register with the
- *       32-bit linear address that generated the exception. The do_pgfault fun can
- *       use this address to locate the corresponding page directory and page-table
- *       entries.
- *   (2) An error code on the kernel stack. The error code for a page fault has a format different from
- *       that for other exceptions. The error code tells the exception handler three things:
- *         -- The P flag   (bit 0) indicates whether the exception was due to a not-present page (0)
- *            or to either an access rights violation or the use of a reserved bit (1).
- *         -- The W/R flag (bit 1) indicates whether the memory access that caused the exception
- *            was a read (0) or write (1).
- *         -- The U/S flag (bit 2) indicates whether the processor was executing at user mode (1)
- *            or supervisor mode (0) at the time of the exception.
+ * 调用图：trap --> trap_dispatch --> pgfault_handler --> do_pgfault
+ * 处理器为 ucore 的 do_pgfault 函数提供了两个信息项以帮助诊断异常并从中恢复。
+ *   (1) CR2 寄存器的内容。处理器将 CR2 寄存器加载生成异常的线性地址。
+ *       do_pgfault 函数可以使用这个地址来定位相应的页目录和页表条目。
+ *   (2) 错误码在内核栈上。页故障的错误码格式与其他异常不同。
+ *      错误码告诉异常处理程序三件事：
+ *         -- P 标志（位 0）表示异常是由于页面不在（0）还是由于访问权限违规或使用保留位（1）。
+ *         -- W/R 标志（位 1）表示引起异常的内存访问是读取（0）还是写入（1）。
+ *         -- U/S 标志（位 2）表示处理器在异常时是在用户模式（1）还是 supervisor 模式（0）下执行。
  */
 int
 do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
     int ret = -E_INVAL;
-    //try to find a vma which include addr
+    // 尝试找到一个包含 addr 的 vma
     struct vma_struct *vma = find_vma(mm, addr);
 
     pgfault_num++;
-    //If the addr is in the range of a mm's vma?
+    // 如果 addr 在 mm 的某个 vma 范围内？
     if (vma == NULL || vma->vm_start > addr) {
         cprintf("not valid addr %x, and  can not find it in vma\n", addr);
         goto failed;
     }
 
-    /* IF (write an existed addr ) OR
-     *    (write an non_existed addr && addr is writable) OR
-     *    (read  an non_existed addr && addr is readable)
-     * THEN
-     *    continue process
+    /* 如果（写一个已存在的地址）或者
+     *    （写一个不存在的地址且地址可写）或者
+     *    （读一个不存在的地址且地址可读）
+     * 那么
+     *    继续处理
      */
     uint32_t perm = PTE_U;
     if (vma->vm_flags & VM_WRITE) {
@@ -356,64 +408,60 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
 
     pte_t *ptep=NULL;
     /*
-    * Maybe you want help comment, BELOW comments can help you finish the code
+    * 也许你想要的帮助注释，以下注释可以帮助你完成代码
     *
-    * Some Useful MACROs and DEFINEs, you can use them in below implementation.
-    * MACROs or Functions:
-    *   get_pte : get an pte and return the kernel virtual address of this pte for la
-    *             if the PT contians this pte didn't exist, alloc a page for PT (notice the 3th parameter '1')
-    *   pgdir_alloc_page : call alloc_page & page_insert functions to allocate a page size memory & setup
-    *             an addr map pa<--->la with linear address la and the PDT pgdir
-    * DEFINES:
-    *   VM_WRITE  : If vma->vm_flags & VM_WRITE == 1/0, then the vma is writable/non writable
-    *   PTE_W           0x002                   // page table/directory entry flags bit : Writeable
-    *   PTE_U           0x004                   // page table/directory entry flags bit : User can access
-    * VARIABLES:
-    *   mm->pgdir : the PDT of these vma
-    *
+    * 一些有用的宏和定义，你可以在下面的实现中使用它们。
+    * 宏或函数：
+    *   get_pte : 获取一个 pte 并返回这个 pte 的内核虚拟地址，对于 la
+    *             如果包含这个 pte 的 PT 不存在，则分配一个页面给 PT（注意第三个参数 '1'）
+    *   pgdir_alloc_page : 调用 alloc_page & page_insert 函数来分配页面大小的内存 & 设置
+    *             一个 addr 映射 pa<--->la，其中线性地址 la 和 PDT pgdir
+    * 定义：
+    *   VM_WRITE  : 如果 vma->vm_flags & VM_WRITE 等于 1/0，则 vma 是可写/不可写
+    *   PTE_W           0x002                   // 页表/目录项标志位：可写
+    *   PTE_U           0x004                   // 页表/目录项标志位：用户可访问
+    * 变量：
+    *   mm->pgdir : 这些 vma 的 PDT
     */
 
-
-    ptep = get_pte(mm->pgdir, addr, 1);  //(1) try to find a pte, if pte's
-                                         //PT(Page Table) isn't existed, then
-                                         //create a PT.
+    ptep = get_pte(mm->pgdir, addr, 1);  // (1) 尝试找到一个 pte，如果 pte 的
+                                         // PT（页表）不存在，则
+                                         // 创建一个 PT。
     if (*ptep == 0) {
         if (pgdir_alloc_page(mm->pgdir, addr, perm) == NULL) {
             cprintf("pgdir_alloc_page in do_pgfault failed\n");
             goto failed;
         }
     } else {
-        /*LAB3 EXERCISE 3: YOUR CODE
+        /* LAB3 EXERCISE 3: YOUR CODE
         * 请你根据以下信息提示，补充函数
-        * 现在我们认为pte是一个交换条目，那我们应该从磁盘加载数据并放到带有phy addr的页面，
-        * 并将phy addr与逻辑addr映射，触发交换管理器记录该页面的访问情况
+        * 现在我们认为 pte 是一个交换条目，那我们应该从磁盘加载数据并放到带有 phy addr 的页面，
+        * 并将 phy addr 与逻辑 addr 映射，触发交换管理器记录该页面的访问情况
         *
-        *  一些有用的宏和定义，可能会对你接下来代码的编写产生帮助(显然是有帮助的)
-        *  宏或函数:
+        *  一些有用的宏和定义，可能会对你接下来代码的编写产生帮助（显然是有帮助的）
+        *  宏或函数：
         *    swap_in(mm, addr, &page) : 分配一个内存页，然后根据
-        *    PTE中的swap条目的addr，找到磁盘页的地址，将磁盘页的内容读入这个内存页
-        *    page_insert ： 建立一个Page的phy addr与线性addr la的映射
+        *    PTE 中的 swap 条目的 addr，找到磁盘页的地址，将磁盘页的内容读入这个内存页
+        *    page_insert ： 建立一个 Page 的 phy addr 与线性 addr la 的映射
         *    swap_map_swappable ： 设置页面可交换
         */
         if (swap_init_ok) {
             struct Page *page = NULL;
             // 你要编写的内容在这里，请基于上文说明以及下文的英文注释完成代码编写
-            //(1）According to the mm AND addr, try
-            //to load the content of right disk page
-            //into the memory which page managed.
-            //(2) According to the mm,
-            //addr AND page, setup the
-            //map of phy addr <--->
-            //logical addr
-            //(3) make the page swappable.
+            // (1) 根据 mm 和 addr，尝试
+            // 加载磁盘页的内容到由 page 管理的内存中。
+            // (2) 根据 mm，
+            // addr 和 page，设置
+            // 物理地址 phy addr 与逻辑地址的映射
+            // (3) 使页面可交换。
             page->pra_vaddr = addr;
         } else {
             cprintf("no swap_init_ok but ptep is %x, failed\n", *ptep);
             goto failed;
         }
-   }
+    }
 
-   ret = 0;
+    ret = 0;
 failed:
     return ret;
 }
