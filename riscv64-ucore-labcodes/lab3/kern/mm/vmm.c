@@ -433,7 +433,7 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
             goto failed;
         }
     } else {
-        /* LAB3 EXERCISE 3: YOUR CODE
+        /* LAB3 EXERCISE 3: YOUR CODE  2213050
         * 请你根据以下信息提示，补充函数
         * 现在我们认为 pte 是一个交换条目，那我们应该从磁盘加载数据并放到带有 phy addr 的页面，
         * 并将 phy addr 与逻辑 addr 映射，触发交换管理器记录该页面的访问情况
@@ -450,10 +450,19 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
             // 你要编写的内容在这里，请基于上文说明以及下文的英文注释完成代码编写
             // (1) 根据 mm 和 addr，尝试
             // 加载磁盘页的内容到由 page 管理的内存中。
+            ret=swap_in(mm,addr,&page);//调用swap_in函数从磁盘上读取数据
+            if(ret!=0)
+            {
+                cprintf("swap_in failed\n");
+               goto failed;                 
+            }
             // (2) 根据 mm，
             // addr 和 page，设置
             // 物理地址 phy addr 与逻辑地址的映射
             // (3) 使页面可交换。
+            // 交换成功，则建立物理地址<--->虚拟地址映射，并将页设置为可交换的
+            page_insert(mm->pgdir, page, addr, perm);
+            swap_map_swappable(mm, addr, page, 1);//将物理页设置为可交换状态
             page->pra_vaddr = addr;
         } else {
             cprintf("no swap_init_ok but ptep is %x, failed\n", *ptep);

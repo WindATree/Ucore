@@ -1,0 +1,53 @@
+
+OpenSBI v0.4 (Jul  2 2019 11:53:53)
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name          : QEMU Virt Machine
+Platform HART Features : RV64ACDFIMSU
+Platform Max HARTs     : 8
+Current Hart           : 0
+Firmware Base          : 0x80000000
+Firmware Size          : 112 KB
+Runtime SBI Version    : 0.1
+
+PMP0: 0x0000000080000000-0x000000008001ffff (A)
+PMP1: 0x0000000000000000-0xffffffffffffffff (A,R,W,X)
+(THU.CST) os is loading ...
+
+Special kernel symbols:
+  entry  0xc0200032 (virtual)
+  etext  0xc0204408 (virtual)
+  edata  0xc020a040 (virtual)
+  end    0xc0211570 (virtual)
+Kernel executable memory footprint: 70KB
+memory management: default_pmm_manager
+membegin 80200000 memend 88000000 mem_size 7e00000
+physcial memory map:
+  memory: 0x07e00000, [0x80200000, 0x87ffffff].
+check_alloc_page() succeeded!
+check_pgdir() succeeded!
+check_boot_pgdir() succeeded!
+check_vma_struct() succeeded!
+Store/AMO page fault
+page fault at 0x00000100: K/W
+check_pgfault() succeeded!
+check_vmm() succeeded.
+SWAP: manager = clock swap manager
+BEGIN check_swap: count 2, total 31661
+ mm->sm_priv c0208f20 in fifo_init_mm
+setup Page Table for vaddr 0X1000, so alloc a page
+setup Page Table vaddr 0~4MB OVER!
+set up init env for check_swap begin!
+Store/AMO page fault
+page fault at 0x00001000: K/W
+kernel panic at kern/mm/swap_clock.c:58:
+    assertion failed: entry != NULL && curr_ptr != NULL
+Welcome to the kernel debug monitor!!
+Type 'help' for a list of commands.
