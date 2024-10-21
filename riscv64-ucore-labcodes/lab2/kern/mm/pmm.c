@@ -1,5 +1,4 @@
-#include <default_pmm.h>
-#include <best_fit_pmm.h>
+
 #include <defs.h>
 #include <error.h>
 #include <memlayout.h>
@@ -10,6 +9,26 @@
 #include <string.h>
 #include <../sync/sync.h>
 #include <riscv.h>
+
+
+#define PMM_FIRST_FIT 0
+#define PMM_BEST_FIT 1
+#define PMM_BUDDY_SYSTEM 2
+#define PMM_SLOB_ALLOCATOR 3
+
+#define PMM_MANAGER PMM_BUDDY_SYSTEM
+
+#if PMM_MANAGER == PMM_FIRST_FIT
+#include <default_pmm.h>
+#elif PMM_MANAGER == PMM_BEST_FIT
+#include <best_fit_pmm.h>
+#elif PMM_MANAGER == PMM_BUDDY_SYSTEM
+#include <buddy_system.h>
+#elif PMM_MANAGER == PMM_SLOB_ALLOCATOR
+#include <buddy_system.h>
+#include <slob_pmm.h>
+#endif
+
 
 // virtual address of physical page array
 struct Page *pages;
@@ -26,6 +45,7 @@ uintptr_t *satp_virtual = NULL;
 // physical address of boot-time page directory
 uintptr_t satp_physical;
 
+size_t fppn;
 // physical memory management
 const struct pmm_manager *pmm_manager;
 
@@ -34,10 +54,21 @@ static void check_alloc_page(void);
 
 // init_pmm_manager - initialize a pmm_manager instance
 static void init_pmm_manager(void) {
+
+#if PMM_MANAGER == PMM_FIRST_FIT
+    pmm_manager = &default_pmm_manager;
+#elif PMM_MANAGER == PMM_BEST_FIT
     pmm_manager = &best_fit_pmm_manager;
+#elif PMM_MANAGER == PMM_BUDDY_SYSTEM
+    pmm_manager = &buddy_pmm_manager;
+#elif PMM_MANAGER == PMM_SLOB_ALLOCATOR
+    pmm_manager = &slob_pmm_manager;
+#endif
+
     cprintf("memory management: %s\n", pmm_manager->name);
     pmm_manager->init();
 }
+
 
 // init_memmap - call pmm->init_memmap to build Page struct for free memory
 static void init_memmap(struct Page *base, size_t n) {
@@ -111,8 +142,17 @@ static void page_init(void) {
 
     mem_begin = ROUNDUP(freemem, PGSIZE);
     mem_end = ROUNDDOWN(mem_end, PGSIZE);
+
+    cprintf("kern_end:  0x%016lx\n", (uint64_t)PADDR(end));
+    cprintf("pages:     0x%016lx\n", (uint64_t)PADDR(pages));
+    cprintf("freemem:   0x%016lx\n", freemem);
+    cprintf("mem_begin: 0x%016lx\n", mem_begin);
+    cprintf("mem_end:   0x%016lx\n", mem_end);
     if (freemem < mem_end) {
+        cprintf("Checkpoint reached: freemem < mem_end\n");
         init_memmap(pa2page(mem_begin), (mem_end - mem_begin) / PGSIZE);
+        cprintf("size_t n is %d",(mem_end - mem_begin) / PGSIZE);
+        fppn=pa2page(mem_begin)-pages+nbase;
     }
 }
 

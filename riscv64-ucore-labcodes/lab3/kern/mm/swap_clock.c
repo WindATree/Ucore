@@ -52,7 +52,7 @@ _clock_init_mm(struct mm_struct *mm)
 static int
 _clock_map_swappable(struct mm_struct *mm, uintptr_t addr, struct Page *page, int swap_in)
 {
-    list_entry_t *head=(list_entry_t*) mm->sm_priv; // 获取链表头
+    list_entry_t *head=mm->sm_priv; // 获取链表头
     list_entry_t *entry=&(page->pra_page_link);
  
     assert(entry != NULL && curr_ptr != NULL);
