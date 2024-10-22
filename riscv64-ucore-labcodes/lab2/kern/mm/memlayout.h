@@ -23,7 +23,7 @@
 // 定义内核栈的页数
 #define KSTACKPAGE          2
 // 定义内核栈的大小
-#define KSTACKSIZE          (KSTACKPAGE * PGSIZE)       // sizeof kernel stack
+#define KSTACKSIZE          (KSTACKPAGE * PGSIZE)       // sizeof kernel stack,PGSIZE=4096  ,mmu.h
 
 // 如果不是汇编语言环境
 #ifndef __ASSEMBLER__

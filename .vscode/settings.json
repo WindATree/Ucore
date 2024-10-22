@@ -1,0 +1,14 @@
+{
+    "C_Cpp.errorSquiggles": "Disabled",
+    "files.associations": {
+        "default_pmm.h": "c",
+        "pmm.h": "c",
+        "defs.h": "c",
+        "assert.h": "c",
+        "list.h": "c",
+        "mmu.h": "c",
+        "memlayout.h": "c",
+        "atomic.h": "c",
+        "string.h": "c"
+    }
+}
