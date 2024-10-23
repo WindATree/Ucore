@@ -9,19 +9,88 @@
 #include <string.h>
 #include <trap.h>
 
-int kern_init(void) __attribute__((noreturn));
+#include <fdt.h>
+
+//int kern_init(void) __attribute__((noreturn));
+int kern_init(uint32_t hartid, uintptr_t dtb_pa);
+
 void grade_backtrace(void);
 
+extern char boot_page_table_sv39[];
 
-int kern_init(void) {
+// int kern_init(void) {
+//     extern char edata[], end[];
+//     memset(edata, 0, end - edata);
+//     cons_init();  // init the console
+//     const char *message = "(THU.CST) os is loading ...\0";
+//     //cprintf("%s\n\n", message);
+//     cputs(message);
+
+//     print_kerninfo();
+
+//     // grade_backtrace();
+//     idt_init();  // init interrupt descriptor table
+
+//     pmm_init();  // init physical memory management
+
+//     idt_init();  // init interrupt descriptor table
+
+//     clock_init();   // init clock interrupt
+//     intr_enable();  // enable irq interrupt
+
+
+//     /* do nothing */
+//     while (1)
+//         ;
+// }
+
+int kern_init(uint32_t hartid, uintptr_t dtb_pa) {
     extern char edata[], end[];
+
     memset(edata, 0, end - edata);
-    cons_init();  // init the console
-    const char *message = "(THU.CST) os is loading ...\0";
-    //cprintf("%s\n\n", message);
+
+    // initialize the console
+    cons_init();
+
+    const char* message = "(NKU.osLoongTea) os is loading ...\0";
     cputs(message);
 
     print_kerninfo();
+
+    cprintf("hartid: %d\n", hartid);
+    cprintf("dtb_pa: 0x%016lx\n", dtb_pa);
+
+    // 0x80000000 is still mapped to itself, so just use the physical address
+    // here.
+    fdt_header_t* fdt_header = (fdt_header_t*)(dtb_pa);
+
+    cprintf("fdt_magic:             0x%08x\n",
+            switch_endian(fdt_header->magic));
+    cprintf("fdt_totalsize:         0x%08x\n",
+            switch_endian(fdt_header->totalsize));
+    cprintf("fdt_off_dt_struct:     0x%08x\n",
+            switch_endian(fdt_header->off_dt_struct));
+    cprintf("fdt_off_dt_strings:    0x%08x\n",
+            switch_endian(fdt_header->off_dt_strings));
+    cprintf("fdt_off_mem_rsvmap:    0x%08x\n",
+            switch_endian(fdt_header->off_mem_rsvmap));
+    cprintf("fdt_version:           0x%08x\n",
+            switch_endian(fdt_header->version));
+    cprintf("fdt_last_comp_version: 0x%08x\n",
+            switch_endian(fdt_header->last_comp_version));
+    cprintf("fdt_boot_cpuid_phys:   0x%08x\n",
+            switch_endian(fdt_header->boot_cpuid_phys));
+    cprintf("fdt_size_dt_strings:   0x%08x\n",
+            switch_endian(fdt_header->size_dt_strings));
+    cprintf("fdt_size_dt_struct:    0x%08x\n",
+            switch_endian(fdt_header->size_dt_struct));
+
+    // Walk through the flattend device tree and print it out.
+    // Comment this to `make grade`.
+    walk_print_device_tree(fdt_header);
+
+    // Clean up the page table
+    boot_page_table_sv39[2] = 0;
 
     // grade_backtrace();
     idt_init();  // init interrupt descriptor table
@@ -30,10 +99,9 @@ int kern_init(void) {
 
     idt_init();  // init interrupt descriptor table
 
-    clock_init();   // init clock interrupt
+    clock_init();  // init clock interrupt
+
     intr_enable();  // enable irq interrupt
-
-
 
     /* do nothing */
     while (1)
