@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "list.h": "c",
+        "pmm.h": "c",
+        "atomic.h": "c"
+    }
+}

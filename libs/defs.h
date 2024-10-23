@@ -63,6 +63,7 @@ typedef size_t ppn_t;
         })
 
 /* Return the offset of 'member' relative to the beginning of a struct type */
+// 返回结构体中某个成员（member）相对于结构体起始位置的偏移量。
 #define offsetof(type, member)                                      \
     ((size_t)(&((type *)0)->member))
 
@@ -72,8 +73,13 @@ typedef size_t ppn_t;
  * @type:   the type of the struct this is embedded in
  * @member: the name of the member within the struct
  * */
+/* *
+ * to_struct - 从指针中获取结构体
+ * @ptr:    成员的结构体指针
+ * @type:   该结构体嵌入的类型
+ * @member: 结构体内部成员的名称
+ * */
 #define to_struct(ptr, type, member)                               \
     ((type *)((char *)(ptr) - offsetof(type, member)))
 
 #endif /* !__LIBS_DEFS_H__ */
-
