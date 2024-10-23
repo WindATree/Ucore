@@ -69,7 +69,13 @@
 // default_free_pages：释放页面。
 // FFMA的详细说明：
 
-// (1) 准备：为了实现FFMA，需要使用某种列表来管理空闲内存块。这里提到了struct free_area_t用于管理空闲内存块，并且需要熟悉list.h中的struct list，这是一个简单的双向链表实现。
+// (1) 准备：为了实现FFMA，需要使用某种列表来管理空闲内存块。这里提到了struct free_area_t用于管理空闲内存块，
+// 并且需要熟悉list.h中的struct list，这是一个简单的双向链表实现。
+
+// struct list_entry {
+//     struct list_entry *prev, *next;
+// };
+
 // (2) default_init：使用这个函数来初始化空闲列表和空闲块的总数nr_free。
 // (3) default_init_memmap：这个函数用于初始化一个空闲块，包括设置页面的属性和将页面链接到空闲列表。
 // (4) default_alloc_pages：搜索空闲列表，找到第一个足够大的空闲块，调整空闲块的大小，并返回分配的内存块地址。
@@ -88,8 +94,8 @@
 free_area_t free_area;
 
 // 定义两个宏，用于简化对全局变量的访问
-#define free_list (free_area.free_list)
-#define nr_free (free_area.nr_free)
+#define free_list (free_area.free_list)// 双向链表头
+#define nr_free (free_area.nr_free)// 这个空闲列表中的空闲页面数量
 
 // 初始化内存管理器，设置空闲列表为空，空闲页数为0
 static void
@@ -101,24 +107,25 @@ default_init(void) {
 // 初始化内存映射，将给定的内存页标记为未分配，并添加到空闲列表
 static void
 default_init_memmap(struct Page *base, size_t n) {
-    assert(n > 0); // 确保页数大于0
     struct Page *p = base;
+    assert(n > 0); // 确保页数大于0
     for (; p != base + n; p++) {
         assert(PageReserved(p)); // 确保页面是保留的
         p->flags = p->property = 0; // 清除页面标志和属性
         set_page_ref(p, 0);        // 设置页面引用计数为0
     }
     base->property = n;            // 设置基础页面的属性为页数
-    SetPageProperty(base);        // 设置页面属性
+    SetPageProperty(base);        // 设置页面属性，判断是否是空页面，可以被继续使用
     nr_free += n;                 // 更新空闲页数
-    if (list_empty(&free_list)) { // 如果空闲列表为空
+    if (list_empty(&free_list)) { // 如果空闲列表为空，这个主要是可以初始化链表
         list_add(&free_list, &(base->page_link)); // 将基础页面添加到空闲列表
-    } else {
+    } 
+    else {
         list_entry_t* le = &free_list;
         while ((le = list_next(le)) != &free_list) {
-            struct Page* page = le2page(le, page_link); // 获取链表条目的页面
-            if (base < page) {
-                list_add_before(le, &(base->page_link)); // 在找到的位置之前插入
+            struct Page* page = le2page(le, page_link); // 获取链表条目的页面，page_link: 结构体内部成员的名称，le：成员的结构体指针
+            if (base < page) { //
+                list_add_before(le, &(base->page_link)); // 在找到的位置之前插入，&(base->page_link)是被插入的页
                 break;
             } else if (list_next(le) == &free_list) {
                 list_add(le, &(base->page_link)); // 在列表末尾插入
