@@ -52,7 +52,7 @@ int kern_init(uint32_t hartid, uintptr_t dtb_pa) {
     // initialize the console
     cons_init();
 
-    const char* message = "(NKU.osLoongTea) os is loading ...\0";
+    const char* message = "(os(hwxfzylc)) os is loading ...\0";
     cputs(message);
 
     print_kerninfo();
