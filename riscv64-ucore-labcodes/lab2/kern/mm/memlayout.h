@@ -62,6 +62,12 @@ struct Page {
 #define PageProperty(page)          test_bit(PG_property, &((page)->flags))
 
 // 将链表入口转换为页面
+/* *
+ * to_struct - 从指针中获取结构体
+ * @ptr:    成员的结构体指针
+ * @type:   该结构体嵌入的类型
+ * @member: 结构体内部成员的名称
+ * */
 #define le2page(le, member)                 \
     to_struct((le), struct Page, member)
 
