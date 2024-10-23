@@ -40,6 +40,7 @@ typedef uintptr_t pde_t;
  * struct Page - 页描述符结构体。每个Page描述一个物理页。
  * 在kern/mm/pmm.h中，你可以找到许多有用的函数，将Page转换为其他数据类型，比如物理地址。
  * */
+// property 变量记录了当前页面中剩余的空闲块数量
 struct Page {
     int ref;                        // 页面的引用计数
     uint64_t flags;                 // 描述页面状态的标志数组
