@@ -162,15 +162,15 @@ best_fit_alloc_pages(size_t n) {
     struct Page *temp = NULL; // 临时变量，用于记录找到的最小空闲块
     // 遍历空闲链表，查找满足需求的空闲页框
     // 如果找到满足需求的页面，记录该页面以及当前找到的最小连续空闲页框数量
-    int y=0;
+    //int y=0;
     while ((le = list_next(le)) != &free_list) {
         struct Page *p = le2page(le, page_link); // 获取当前链表项对应的页面
         if (p->property >= n && p->property < min_size) { // 如果页面的属性大于等于n且小于当前最小大小
             min_size = p->property; // 更新最小大小
             temp = p; // 更新临时变量
-            y++;
-            cprintf("y===============%d\n",y);
-            //break;
+            //y++;
+            //cprintf("y===============%d\n",y);
+            break;
         }
     }
     page = temp; // 将找到的最小空闲块赋值给page
