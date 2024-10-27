@@ -58,7 +58,7 @@ void buddy_system_memmap(struct Page *base, size_t n) {
 
     uint32_t real_n = 1 << order;
 
-    nr_free = real_n;
+    nr_free += real_n;
 
     //cprintf("Order: %d, Real number of pages: %d\n", order, real_n);
 
