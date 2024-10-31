@@ -51,6 +51,7 @@ struct swap_manager
 };
 
 extern volatile int swap_init_ok; // 声明外部变量swap_init_ok，表示交换初始化是否成功
+extern list_entry_t pra_list_head;
 int swap_init(void); // 交换初始化函数
 int swap_init_mm(struct mm_struct *mm); // 初始化mm_struct中的交换数据
 int swap_tick_event(struct mm_struct *mm); // 时钟中断事件处理

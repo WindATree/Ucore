@@ -6,10 +6,17 @@
 #include <swap_fifo.h>
 #include <list.h>
 
-/* [维基百科] 最简单的页面替换算法（PRA）是先进先出（FIFO）算法。先进先出页面替换算法是一种低开销算法，它要求操作系统进行很少的记录工作。从名字就可以看出这个想法——操作系统会跟踪所有内存中的页面，并将其按照时间顺序排列在一个队列中，最新的页面在队列的末尾，最早的页面在队列的前面。当需要替换页面时，会选择队列最前面的页面（最旧的页面）。虽然FIFO算法成本低且直观，但在实际应用中表现不佳。因此，它很少以未修改的形式使用。这个算法经历了Belady异常。
+/* [维基百科] 最简单的页面替换算法（PRA）是先进先出（FIFO）算法。先进先出页面替换算法是一种低开销算法，它要求操作系统进行很少的记录工作。
+从名字就可以看出这个想法——操作系统会跟踪所有内存中的页面，并将其按照时间顺序排列在一个队列中，最新的页面在队列的末尾，最早的页面在队列的前面。
+当需要替换页面时，会选择队列最前面的页面（最旧的页面）。虽然FIFO算法成本低且直观，但在实际应用中表现不佳。因此，它很少以未修改的形式使用。
+这个算法经历了Belady异常。
 
 FIFO PRA的详细信息
-(1) 准备：为了实现FIFO PRA，我们应该管理所有的可交换页面，以便我们可以将这些页面根据时间顺序链接到pra_list_head。首先，你应该熟悉list.h中的struct list。struct list是一个简单的双向链表实现。你应该知道如何使用：list_init, list_add(list_add_after), list_add_before, list_del, list_next, list_prev。另一个技巧是将一个通用的链表结构转换为一个特殊的结构（例如struct page）。你可以在memlayout.h中找到一些宏：le2page，（在未来的实验中：le2vma (in vmm.h), le2proc (in proc.h)等。
+(1) 准备：为了实现FIFO PRA，我们应该管理所有的可交换页面，以便我们可以将这些页面根据时间顺序链接到pra_list_head。
+首先，你应该熟悉list.h中的struct list。struct list是一个简单的双向链表实现。你应该知道如何使用：
+list_init, list_add(list_add_after), list_add_before, list_del, list_next, list_prev。
+另一个技巧是将一个通用的链表结构转换为一个特殊的结构（例如struct page）。你可以在memlayout.h中找到一些宏：
+le2page，（在未来的实验中：le2vma (in vmm.h), le2proc (in proc.h)等。
  */
 
 list_entry_t pra_list_head;

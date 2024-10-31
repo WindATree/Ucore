@@ -364,20 +364,21 @@ check_pgfault(void) {
 // 缺页次数计数器
 volatile unsigned int pgfault_num=0;
 
-/* do_pgfault - 处理缺页异常的中断处理程序
- * @mm         : 使用相同页目录表的一组 vma 的控制结构
- * @error_code : 由 x86 硬件设置在 trapframe->tf_err 中记录的错误码
- * @addr       : 导致内存访问异常的地址（CR2 寄存器的内容）
+/*
+ * do_pgfault - 处理缺页异常的核心函数
+ * @mm         : 管理一组使用相同页目录表的 vma（虚拟内存区域）控制结构
+ * @error_code : 错误码，记录在 trapframe->tf_err 中，标识页错误的原因
+ * @addr       : 触发异常的线性地址（即 CR2 寄存器的内容）
  *
- * 调用图：trap --> trap_dispatch --> pgfault_handler --> do_pgfault
- * 处理器为 ucore 的 do_pgfault 函数提供了两个信息项以帮助诊断异常并从中恢复。
- *   (1) CR2 寄存器的内容。处理器将 CR2 寄存器加载生成异常的线性地址。
- *       do_pgfault 函数可以使用这个地址来定位相应的页目录和页表条目。
- *   (2) 错误码在内核栈上。页故障的错误码格式与其他异常不同。
- *      错误码告诉异常处理程序三件事：
- *         -- P 标志（位 0）表示异常是由于页面不在（0）还是由于访问权限违规或使用保留位（1）。
- *         -- W/R 标志（位 1）表示引起异常的内存访问是读取（0）还是写入（1）。
- *         -- U/S 标志（位 2）表示处理器在异常时是在用户模式（1）还是 supervisor 模式（0）下执行。
+ * 处理过程：trap --> trap_dispatch --> pgfault_handler --> do_pgfault
+ * do_pgfault 从处理器获得以下信息，用于诊断异常并尝试恢复：
+ *   - CR2 寄存器的内容：记录异常的线性地址
+ *   - 错误码：指出异常的具体原因，包括页面不存在、访问权限错误等。
+ * 
+ * 错误码的格式：
+ *   - P 位（位 0）：表示页面不在（0）或访问权限错误（1）
+ *   - W/R 位（位 1）：标识引发异常的内存访问是读取（0）还是写入（1）
+ *   - U/S 位（位 2）：标识异常发生时是否在用户模式（1）或 supervisor 模式（0）
  */
 int
 do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
@@ -392,27 +393,23 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
         goto failed;
     }
 
-    /* 如果（写一个已存在的地址）或者
-     *    （写一个不存在的地址且地址可写）或者
-     *    （读一个不存在的地址且地址可读）
-     * 那么
-     *    继续处理
+    /*
+     * 根据 vma 的标志，设置页表权限位 perm
+     * 若 vma 可写，则权限包含 PTE_W；否则仅包含 PTE_R 和 PTE_U
      */
     uint32_t perm = PTE_U;
     if (vma->vm_flags & VM_WRITE) {
         perm |= (PTE_R | PTE_W);
     }
-    addr = ROUNDDOWN(addr, PGSIZE);
+    addr = ROUNDDOWN(addr, PGSIZE);// 将 addr 对齐到页边界
 
-    ret = -E_NO_MEM;
+    ret = -E_NO_MEM; // 若内存不足时返回该错误
 
     pte_t *ptep=NULL;
     /*
-    * 也许你想要的帮助注释，以下注释可以帮助你完成代码
-    *
     * 一些有用的宏和定义，你可以在下面的实现中使用它们。
     * 宏或函数：
-    *   get_pte : 获取一个 pte 并返回这个 pte 的内核虚拟地址，对于 la
+    *   get_pte : 获取一个 pte 并返回这个 pte 的内核虚拟地址，对于 la,
     *             如果包含这个 pte 的 PT 不存在，则分配一个页面给 PT（注意第三个参数 '1'）
     *   pgdir_alloc_page : 调用 alloc_page & page_insert 函数来分配页面大小的内存 & 设置
     *             一个 addr 映射 pa<--->la，其中线性地址 la 和 PDT pgdir
@@ -424,11 +421,9 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
     *   mm->pgdir : 这些 vma 的 PDT
     */
 
-    ptep = get_pte(mm->pgdir, addr, 1);  // (1) 尝试找到一个 pte，如果 pte 的
-                                         // PT（页表）不存在，则
-                                         // 创建一个 PT。
-    if (*ptep == 0) {
-        if (pgdir_alloc_page(mm->pgdir, addr, perm) == NULL) {
+    ptep = get_pte(mm->pgdir, addr, 1); //尝试找到一个 pte，如果 pte 的PT（页表）不存在，则创建一个 PT。
+    if (*ptep == 0) {// 如果 pte 尚未映射任何页面
+        if (pgdir_alloc_page(mm->pgdir, addr, perm) == NULL) { // 分配新页面并映射
             cprintf("pgdir_alloc_page in do_pgfault failed\n");
             goto failed;
         }
@@ -437,30 +432,23 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
         * 请你根据以下信息提示，补充函数
         * 现在我们认为 pte 是一个交换条目，那我们应该从磁盘加载数据并放到带有 phy addr 的页面，
         * 并将 phy addr 与逻辑 addr 映射，触发交换管理器记录该页面的访问情况
-        *
-        *  一些有用的宏和定义，可能会对你接下来代码的编写产生帮助（显然是有帮助的）
-        *  宏或函数：
-        *    swap_in(mm, addr, &page) : 分配一个内存页，然后根据
-        *    PTE 中的 swap 条目的 addr，找到磁盘页的地址，将磁盘页的内容读入这个内存页
+        * 宏或函数：
+        *    swap_in(mm, addr, &page) : 分配一个内存页，从PTE中的swap条目的addr，找到磁盘页的地址，将磁盘页的内容读入这个内存页
         *    page_insert ： 建立一个 Page 的 phy addr 与线性 addr la 的映射
         *    swap_map_swappable ： 设置页面可交换
         */
         if (swap_init_ok) {
             struct Page *page = NULL;
-            // 你要编写的内容在这里，请基于上文说明以及下文的英文注释完成代码编写
-            // (1) 根据 mm 和 addr，尝试
-            // 加载磁盘页的内容到由 page 管理的内存中。
+            // 你要编写的内容在这里
+            // (1) 根据 mm 和 addr，尝试加载磁盘页的内容到由 page 管理的内存中。
             ret=swap_in(mm,addr,&page);//调用swap_in函数从磁盘上读取数据
             if(ret!=0)
             {
-                cprintf("swap_in failed\n");
+               cprintf("swap_in failed\n");
                goto failed;                 
             }
-            // (2) 根据 mm，
-            // addr 和 page，设置
-            // 物理地址 phy addr 与逻辑地址的映射
-            // (3) 使页面可交换。
-            // 交换成功，则建立物理地址<--->虚拟地址映射，并将页设置为可交换的
+            // (2) 根据 mm，addr 和 page，设置物理地址 phy addr 与逻辑地址的映射
+            // (3) 使页面可交换。交换成功，则建立物理地址<--->虚拟地址映射，并将页设置为可交换的
             page_insert(mm->pgdir, page, addr, perm);
             swap_map_swappable(mm, addr, page, 1);//将物理页设置为可交换状态
             page->pra_vaddr = addr;
@@ -469,7 +457,6 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
             goto failed;
         }
     }
-
     ret = 0;
 failed:
     return ret;

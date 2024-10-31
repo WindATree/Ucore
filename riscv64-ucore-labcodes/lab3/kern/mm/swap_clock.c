@@ -6,25 +6,6 @@
 #include <swap_clock.h>
 #include <list.h>
 
-/* [wikipedia]The simplest Page Replacement Algorithm(PRA) is a FIFO algorithm. The first-in, first-out
- * page replacement algorithm is a low-overhead algorithm that requires little book-keeping on
- * the part of the operating system. The idea is obvious from the name - the operating system
- * keeps track of all the pages in memory in a queue, with the most recent arrival at the back,
- * and the earliest arrival in front. When a page needs to be replaced, the page at the front
- * of the queue (the oldest page) is selected. While FIFO is cheap and intuitive, it performs
- * poorly in practical application. Thus, it is rarely used in its unmodified form. This
- * algorithm experiences Belady's anomaly.
- *
- * Details of FIFO PRA
- * (1) Prepare: In order to implement FIFO PRA, we should manage all swappable pages, so we can
- *              link these pages into pra_list_head according the time order. At first you should
- *              be familiar to the struct list in list.h. struct list is a simple doubly linked list
- *              implementation. You should know howto USE: list_init, list_add(list_add_after),
- *              list_add_before, list_del, list_next, list_prev. Another tricky method is to transform
- *              a general list struct to a special struct (such as struct page). You can find some MACRO:
- *              le2page (in memlayout.h), (in future labs: le2vma (in vmm.h), le2proc (in proc.h),etc.
- */
-
 extern list_entry_t pra_list_head;
 list_entry_t *curr_ptr;
 /*
@@ -41,9 +22,9 @@ _clock_init_mm(struct mm_struct *mm)
      
 
      list_init(&pra_list_head);
-     list_entry_t curr_ptr=pra_list_head;
+     curr_ptr=&pra_list_head;
      mm->sm_priv=&curr_ptr;
-     cprintf(" mm->sm_priv %x in fifo_init_mm\n",mm->sm_priv);
+     //cprintf(" mm->sm_priv %x in fifo_init_mm\n",mm->sm_priv);
      return 0;
 }
 /*
@@ -61,10 +42,9 @@ _clock_map_swappable(struct mm_struct *mm, uintptr_t addr, struct Page *page, in
     // link the most recent arrival page at the back of the pra_list_head qeueue.
     // 将页面page插入到页面链表pra_list_head的末尾
     // 将页面的visited标志置为1，表示该页面已被访问
-    list_add(head,entry);
+    list_add_before((list_entry_t*)mm->sm_priv,entry);
     page->visited = 1;
-    curr_ptr = entry;
-    cprintf("curr_ptr %p\n", curr_ptr);
+    //cprintf("curr_ptr %p\n", curr_ptr);
     return 0;
 }
 /*
@@ -89,19 +69,23 @@ _clock_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tic
         // 获取当前页面对应的Page结构指针
         // 如果当前页面未被访问，则将该页面从页面链表中删除，并将该页面指针赋值给ptr_page作为换出页面
         // 如果当前页面已被访问，则将visited标志置为0，表示该页面已被重新访问
-        list_entry_t * entry=list_prev(temp);
-        struct Page *p=le2page(entry,pra_page_link);
-
-        if(p->visited==0){
-            list_del(entry);
-            *ptr_page = p;
-            cprintf("curr_ptr %p\n", curr_ptr);
+        curr_ptr = list_next(curr_ptr);
+        if(curr_ptr == head) {
+            curr_ptr = list_next(curr_ptr);
+            if(curr_ptr == head) {
+                *ptr_page = NULL;
+                break;
+            }
+        }
+        struct Page* page = le2page(curr_ptr, pra_page_link);
+        if(!page->visited) {
+            *ptr_page = page;
+            list_del(curr_ptr);
+            cprintf("curr_ptr %p\n",curr_ptr);
             break;
+        } else {
+            page->visited = 0;
         }
-        if(p->visited==1){
-            p->visited=0;
-        }
-        temp=entry;
     }
 
     return 0;
