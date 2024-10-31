@@ -6,9 +6,6 @@
 #include <swap_lru.h>
 #include <list.h>
 
-// 定义全局链表头 pra_list_head，用于维护页替换管理中的页面链表
-
-
 /* 
  * _lru_init_mm - 初始化链表用于 LRU 缺页管理
  * @mm: 管理虚拟内存区域的 mm_struct 结构体

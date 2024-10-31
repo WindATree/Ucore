@@ -441,12 +441,7 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
             struct Page *page = NULL;
             // 你要编写的内容在这里
             // (1) 根据 mm 和 addr，尝试加载磁盘页的内容到由 page 管理的内存中。
-            ret=swap_in(mm,addr,&page);//调用swap_in函数从磁盘上读取数据
-            if(ret!=0)
-            {
-               cprintf("swap_in failed\n");
-               goto failed;                 
-            }
+            swap_in(mm,addr,&page);//调用swap_in函数从磁盘上读取数据
             // (2) 根据 mm，addr 和 page，设置物理地址 phy addr 与逻辑地址的映射
             // (3) 使页面可交换。交换成功，则建立物理地址<--->虚拟地址映射，并将页设置为可交换的
             page_insert(mm->pgdir, page, addr, perm);
