@@ -1,22 +1,25 @@
 #include <riscv.h>
 
-    .altmacro
-    .align 2
-    .macro SAVE_ALL
-    LOCAL _restore_kernel_sp
-    LOCAL _save_context
+// 使用.altmacro指令允许使用局部宏。
+.altmacro
+// 确保指令对齐，以便于加载到缓存。
+.align 2
 
-    # If coming from userspace, preserve the user stack pointer and load
-    # the kernel stack pointer. If we came from the kernel, sscratch
-    # will contain 0, and we should continue on the current stack.
-    csrrw sp, sscratch, sp
-    bnez sp, _save_context
+// 定义一个宏SAVE_ALL，用于保存所有寄存器到栈上。
+.macro SAVE_ALL
+LOCAL _restore_kernel_sp
+LOCAL _save_context
+
+    // 如果从用户空间来，保存用户栈指针并加载内核栈指针。
+    // 如果我们从内核来，sscratch将包含0，我们应该继续使用当前栈。
+    csrrw sp, sscratch, sp // 将sscratch寄存器的值与sp寄存器的值交换
+    bnez sp, _save_context // 如果sp非零，跳转到_save_context
 
 _restore_kernel_sp:
-    csrr sp, sscratch
+    csrr sp, sscratch // 从sscratch寄存器加载值到sp
 _save_context:
-    addi sp, sp, -36 * REGBYTES
-    # save x registers
+    addi sp, sp, -36 * REGBYTES // 为保存寄存器值预留空间
+    // 保存x寄存器
     STORE x0, 0*REGBYTES(sp)
     STORE x1, 1*REGBYTES(sp)
     STORE x3, 3*REGBYTES(sp)
@@ -49,13 +52,12 @@ _save_context:
     STORE x30, 30*REGBYTES(sp)
     STORE x31, 31*REGBYTES(sp)
 
-    # get sr, epc, tval, cause
-    # Set sscratch register to 0, so that if a recursive exception
-    # occurs, the exception vector knows it came from the kernel
+    // 获取sr, epc, tval, cause
+    // 设置sscratch寄存器为0，以便如果发生递归异常，异常向量知道它来自内核
     csrrw s0, sscratch, x0
     csrr s1, sstatus
     csrr s2, sepc
-    csrr s3, 0x143
+    csrr s3, 0x143 // 假设这是一个特定的CSR寄存器地址
     csrr s4, scause
 
     STORE s0, 2*REGBYTES(sp)
@@ -63,27 +65,28 @@ _save_context:
     STORE s2, 33*REGBYTES(sp)
     STORE s3, 34*REGBYTES(sp)
     STORE s4, 35*REGBYTES(sp)
-    .endm
+.endm
 
-    .macro RESTORE_ALL
-    LOCAL _save_kernel_sp
-    LOCAL _restore_context
+// 定义一个宏RESTORE_ALL，用于从栈上恢复所有寄存器。
+.macro RESTORE_ALL
+LOCAL _save_kernel_sp
+LOCAL _restore_context
 
     LOAD s1, 32*REGBYTES(sp)
     LOAD s2, 33*REGBYTES(sp)
 
-    andi s0, s1, SSTATUS_SPP
-    bnez s0, _restore_context
+    andi s0, s1, SSTATUS_SPP // 检查sstatus寄存器的SPP位
+    bnez s0, _restore_context // 如果SPP位为1，跳转到_restore_context
 
 _save_kernel_sp:
-    # Save unwound kernel stack pointer in sscratch
+    // 保存未展开的内核栈指针在sscratch
     addi s0, sp, 36 * REGBYTES
     csrw sscratch, s0
 _restore_context:
     csrw sstatus, s1
     csrw sepc, s2
 
-    # restore x registers
+    // 恢复x寄存器
     LOAD x1, 1*REGBYTES(sp)
     LOAD x3, 3*REGBYTES(sp)
     LOAD x4, 4*REGBYTES(sp)
@@ -114,36 +117,40 @@ _restore_context:
     LOAD x29, 29*REGBYTES(sp)
     LOAD x30, 30*REGBYTES(sp)
     LOAD x31, 31*REGBYTES(sp)
-    # restore sp last
+    // 最后恢复sp
     LOAD x2, 2*REGBYTES(sp)
-    .endm
+.endm
 
-    .globl __alltraps
+// 全局标签，用于所有陷阱的入口点
+.globl __alltraps
 __alltraps:
     SAVE_ALL
 
-    move  a0, sp
-    jal trap
-    # sp should be the same as before "jal trap"
+    move a0, sp // 将当前栈指针移动到a0寄存器
+    jal trap // 跳转到trap处理函数
+    // sp应该与"jal trap"之前相同
 
-    .globl __trapret
+// 全局标签，用于从陷阱返回
+.globl __trapret
 __trapret:
     RESTORE_ALL
-    # return from supervisor call
+    // 从超级用户调用返回
     sret
- 
-    .globl forkrets
+
+// 全局标签，用于fork系统调用的返回
+.globl forkrets
 forkrets:
-    # set stack to this new process's trapframe
+    // 将栈设置为这个新进程的trapframe
     move sp, a0
     j __trapret
 
-    .global kernel_execve_ret
+// 全局标签，用于kernel_execve系统调用的返回
+.global kernel_execve_ret
 kernel_execve_ret:
-    // adjust sp to beneath kstacktop of current process
+    // 调整sp到当前进程的kstacktop之下
     addi a1, a1, -36*REGBYTES
 
-    // copy from previous trapframe to new trapframe
+    // 从上一个trapframe复制到新的trapframe
     LOAD s1, 35*REGBYTES(a0)
     STORE s1, 35*REGBYTES(a1)
     LOAD s1, 34*REGBYTES(a0)
@@ -217,6 +224,6 @@ kernel_execve_ret:
     LOAD s1, 0*REGBYTES(a0)
     STORE s1, 0*REGBYTES(a1)
 
-    // acutually adjust sp
+    // 实际调整sp
     move sp, a1
     j __trapret
