@@ -18,8 +18,10 @@
 #include <sbi.h>
 #include <proc.h>
 
+// 定义一个宏，表示ticks的数量
 #define TICK_NUM 2
 
+// 静态函数，用于打印ticks数量
 static void print_ticks() {
     cprintf("%d ticks\n",TICK_NUM);
 #ifdef DEBUG_GRADE
@@ -28,20 +30,21 @@ static void print_ticks() {
 #endif
 }
 
-/* idt_init - initialize IDT to each of the entry points in kern/trap/vectors.S */
+/*
+ * idt_init - 初始化中断描述符表（IDT）到kern/trap/vectors.S中的每个入口点
+ */
 void
 idt_init(void) {
     extern void __alltraps(void);
-    /* Set sscratch register to 0, indicating to exception vector that we are
-     * presently executing in the kernel */
+    /* 将sscratch寄存器设置为0，表示我们当前在内核中执行 */
     write_csr(sscratch, 0);
-    /* Set the exception vector address */
+    /* 设置异常向量地址 */
     write_csr(stvec, &__alltraps);
-    /* Allow kernel to access user memory */
+    /* 允许内核访问用户内存 */
     set_csr(sstatus, SSTATUS_SUM);
 }
 
-/* trap_in_kernel - test if trap happened in kernel */
+/* trap_in_kernel - 测试陷阱是否发生在内核中 */
 bool trap_in_kernel(struct trapframe *tf) {
     return (tf->status & SSTATUS_SPP) != 0;
 }
@@ -57,6 +60,7 @@ print_trapframe(struct trapframe *tf) {
 }
 
 void print_regs(struct pushregs* gpr) {
+    // 打印通用寄存器的值
     cprintf("  zero     0x%08x\n", gpr->zero);
     cprintf("  ra       0x%08x\n", gpr->ra);
     cprintf("  sp       0x%08x\n", gpr->sp);
@@ -97,25 +101,40 @@ static inline void print_pgfault(struct trapframe *tf) {
             tf->cause == CAUSE_STORE_PAGE_FAULT ? 'W' : 'R');
 }
 
+/**
+ * 处理页面错误（Page Fault）的函数。
+ * 
+ * @param tf 指向trapframe结构体的指针，包含了中断发生时的上下文信息。
+ * @return 返回值由do_pgfault函数决定。
+ */
 static int
 pgfault_handler(struct trapframe *tf) {
+    // 外部声明的mm_struct结构体指针，用于测试检查swap。
     extern struct mm_struct *check_mm_struct;
-    if(check_mm_struct !=NULL) { //used for test check_swap
-            print_pgfault(tf);
-        }
+    // 如果check_mm_struct不为空，则用于测试检查swap。
+    if(check_mm_struct != NULL) { 
+        print_pgfault(tf);
+    }
+    
+    // 定义一个mm_struct结构体指针，用于存储进程的内存管理信息。
     struct mm_struct *mm;
+    // 如果check_mm_struct不为空，则断言当前进程是idleproc，并使用check_mm_struct。
     if (check_mm_struct != NULL) {
         assert(current == idleproc);
         mm = check_mm_struct;
     }
+    // 如果check_mm_struct为空，则检查当前进程是否为空。
     else {
+        // 如果当前进程为空，则打印trapframe和页面错误信息，并触发panic。
         if (current == NULL) {
             print_trapframe(tf);
             print_pgfault(tf);
             panic("unhandled page fault.\n");
         }
+        // 如果当前进程不为空，则使用当前进程的mm。
         mm = current->mm;
     }
+    // 调用do_pgfault函数来实际处理页面错误，并返回其返回值。
     return do_pgfault(mm, tf->cause, tf->tval);
 }
 
@@ -125,6 +144,7 @@ extern struct mm_struct *check_mm_struct;
 void interrupt_handler(struct trapframe *tf) {
     intptr_t cause = (tf->cause << 1) >> 1;
     switch (cause) {
+        // 处理不同的中断类型
         case IRQ_U_SOFT:
             cprintf("User software interrupt\n");
             break;
@@ -174,10 +194,12 @@ void interrupt_handler(struct trapframe *tf) {
             break;
     }
 }
+
 void kernel_execve_ret(struct trapframe *tf,uintptr_t kstacktop);
 void exception_handler(struct trapframe *tf) {
     int ret;
     switch (tf->cause) {
+        // 处理不同的异常类型
         case CAUSE_MISALIGNED_FETCH:
             cprintf("Instruction address misaligned\n");
             break;
@@ -256,22 +278,21 @@ void exception_handler(struct trapframe *tf) {
 
 static inline void trap_dispatch(struct trapframe* tf) {
     if ((intptr_t)tf->cause < 0) {
-        // interrupts
+        // 中断处理
         interrupt_handler(tf);
     } else {
-        // exceptions
+        // 异常处理
         exception_handler(tf);
     }
 }
 
-/* *
- * trap - handles or dispatches an exception/interrupt. if and when trap() returns,
- * the code in kern/trap/trapentry.S restores the old CPU state saved in the
- * trapframe and then uses the iret instruction to return from the exception.
- * */
+/* 
+ * trap - 处理或分派一个异常/中断。如果trap()返回，
+ * kern/trap/trapentry.S中的代码将恢复旧的CPU状态，并使用iret指令从异常中返回。
+ */
 void
 trap(struct trapframe *tf) {
-    // dispatch based on what type of trap occurred
+    // 根据发生的陷阱类型进行分派
     if (current == NULL) {
         trap_dispatch(tf);
     } else {
@@ -293,5 +314,3 @@ trap(struct trapframe *tf) {
         }
     }
 }
-
-
