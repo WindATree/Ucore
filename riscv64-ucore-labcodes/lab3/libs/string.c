@@ -258,25 +258,39 @@ strtol(const char *s, char **endptr, int base) {
     return (neg ? -val : val);
 }
 
-/* *
- * memset - sets the first @n bytes of the memory area pointed by @s
- * to the specified value @c.
- * @s:      pointer the the memory area to fill
- * @c:      value to set
- * @n:      number of bytes to be set to the value
+/*
+ * memset - 将内存区域的前 n 个字节设置为指定的值
+ * @s: 指向目标内存区域的指针
+ * @c: 要填充的值（以字节为单位）
+ * @n: 要填充的字节数
  *
- * The memset() function returns @s.
- * */
+ * 描述：
+ * - 此函数将从指针 s 指向的内存区域开始，连续填充 n 个字节为值 c。
+ * - 如果定义了 __HAVE_ARCH_MEMSET，将使用体系结构相关的优化版本。
+ * - 否则，使用通用 C 实现，通过逐字节操作完成填充。
+ *
+ * 返回：
+ * - 返回指向目标内存区域的指针 s。
+ */
 void *
 memset(void *s, char c, size_t n) {
 #ifdef __HAVE_ARCH_MEMSET
+    /*
+     * 如果存在体系结构相关的 memset 实现（如汇编优化版本），
+     * 则直接调用优化函数 __memset(s, c, n)，提高性能。
+     */
     return __memset(s, c, n);
 #else
-    char *p = s;
-    while (n -- > 0) {
-        *p ++ = c;
+    /*
+     * 通用 C 实现：
+     * - 使用一个字符指针 p 遍历内存区域。
+     * - 循环 n 次，每次设置内存中的一个字节为值 c。
+     */
+    char *p = s;             // 转换目标地址为字符指针，方便逐字节操作
+    while (n-- > 0) {        // 每次操作一个字节，直到 n 减为 0
+        *p++ = c;            // 设置当前字节为 c，并移动指针到下一个字节
     }
-    return s;
+    return s;                // 返回目标内存区域的起始指针
 #endif /* __HAVE_ARCH_MEMSET */
 }
 

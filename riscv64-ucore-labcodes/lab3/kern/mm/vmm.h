@@ -55,3 +55,4 @@ extern volatile unsigned int pgfault_num; // 外部定义的缺页异常次数�
 extern struct mm_struct *check_mm_struct; // 外部定义的 mm 结构体指针，用于测试和检查
 
 #endif /* !__KERN_MM_VMM_H__ */ // 结束条件编译
+ 

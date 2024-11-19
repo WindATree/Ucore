@@ -379,7 +379,7 @@ volatile unsigned int pgfault_num=0;
  *   - P 位（位 0）：表示页面不在（0）或访问权限错误（1）
  *   - W/R 位（位 1）：标识引发异常的内存访问是读取（0）还是写入（1）
  *   - U/S 位（位 2）：标识异常发生时是否在用户模式（1）或 supervisor 模式（0）
- */
+ */ 
 int
 do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
     int ret = -E_INVAL;
@@ -451,7 +451,7 @@ do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
             cprintf("no swap_init_ok but ptep is %x, failed\n", *ptep);
             goto failed;
         }
-    }
+    } 
     ret = 0;
 failed:
     return ret;
