@@ -1,28 +1,27 @@
 #ifndef __KERN_MM_MEMLAYOUT_H__
 #define __KERN_MM_MEMLAYOUT_H__
-
-/* This file contains the definitions for memory management in our OS. */
+/* 本文件包含了操作系统内存管理的定义 */
 
 /* *
- * Virtual memory map:                                          Permissions
- *                                                              kernel/user
- *
+ * 虚拟内存映射：                                          权限
+ *                                                              内核/用户
+ * 
  *     4G ------------------> +---------------------------------+
  *                            |                                 |
- *                            |         Empty Memory (*)        |
+ *                            |         空闲内存 (*)            |
  *                            |                                 |
  *                            +---------------------------------+ 0xFB000000
- *                            |   Cur. Page Table (Kern, RW)    | RW/-- PTSIZE
+ *                            |   当前页表 (内核, 读写)         | 读/写 -- PTSIZE
  *     VPT -----------------> +---------------------------------+ 0xFAC00000
- *                            |        Invalid Memory (*)       | --/--
+ *                            |        无效内存 (*)            | --/--
  *     KERNTOP -------------> +---------------------------------+ 0xF8000000
  *                            |                                 |
- *                            |    Remapped Physical Memory     | RW/-- KMEMSIZE
+ *                            |    重新映射的物理内存          | 读/写 -- KMEMSIZE
  *                            |                                 |
  *     KERNBASE ------------> +---------------------------------+ 0xC0000000
- *                            |        Invalid Memory (*)       | --/--
+ *                            |        无效内存 (*)            | --/--
  *     USERTOP -------------> +---------------------------------+ 0xB0000000
- *                            |           User stack            |
+ *                            |           用户栈               |
  *                            +---------------------------------+
  *                            |                                 |
  *                            :                                 :
@@ -30,52 +29,50 @@
  *                            :                                 :
  *                            |                                 |
  *                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- *                            |       User Program & Heap       |
+ *                            |       用户程序和堆区           |
  *     UTEXT ---------------> +---------------------------------+ 0x00800000
- *                            |        Invalid Memory (*)       | --/--
+ *                            |        无效内存 (*)            | --/--
  *                            |  - - - - - - - - - - - - - - -  |
- *                            |    User STAB Data (optional)    |
+ *                            |    用户 STAB 数据 (可选)       |
  *     USERBASE, USTAB------> +---------------------------------+ 0x00200000
- *                            |        Invalid Memory (*)       | --/--
+ *                            |        无效内存 (*)            | --/--
  *     0 -------------------> +---------------------------------+ 0x00000000
- * (*) Note: The kernel ensures that "Invalid Memory" is *never* mapped.
- *     "Empty Memory" is normally unmapped, but user programs may map pages
- *     there if desired.
- *
+ * (*) 注意：内核确保 "无效内存" *永远* 不会被映射。
+ *     "空闲内存"通常是未映射的，但用户程序可以根据需要将其映射到页面。
  * */
 
-/* All physical memory mapped at this address */
-#define KERNBASE            0xFFFFFFFFC0200000
-#define KMEMSIZE            0x7E00000                  // the maximum amount of physical memory
-#define KERNTOP             (KERNBASE + KMEMSIZE)
+/* 所有物理内存映射到此地址 */
+#define KERNBASE            0xFFFFFFFFC0200000  // 内核基址
+#define KMEMSIZE            0x7E00000           // 物理内存的最大大小
+#define KERNTOP             (KERNBASE + KMEMSIZE) // 内核顶部
 
-#define KERNEL_BEGIN_PADDR 0x80200000
-#define KERNEL_BEGIN_VADDR 0xFFFFFFFFC0200000
-#define PHYSICAL_MEMORY_END 0x88000000
+#define KERNEL_BEGIN_PADDR 0x80200000    // 内核起始物理地址
+#define KERNEL_BEGIN_VADDR 0xFFFFFFFFC0200000  // 内核起始虚拟地址
+#define PHYSICAL_MEMORY_END 0x88000000  // 物理内存结束地址
+
 /* *
- * Virtual page table. Entry PDX[VPT] in the PD (Page Directory) contains
- * a pointer to the page directory itself, thereby turning the PD into a page
- * table, which maps all the PTEs (Page Table Entry) containing the page mappings
- * for the entire virtual address space into that 4 Meg region starting at VPT.
+ * 虚拟页表。页目录 (PD) 中的条目 PDX[VPT] 指向页目录本身，
+ * 通过此方式将页目录转化为页表，映射包含整个虚拟地址空间映射的页表项（PTE），
+ * 并将其映射到从 VPT 开始的 4MB 区域。
  * */
 
-#define KSTACKPAGE          2                           // # of pages in kernel stack
-#define KSTACKSIZE          (KSTACKPAGE * PGSIZE)       // sizeof kernel stack
+#define KSTACKPAGE          2                          // 内核栈的页面数
+#define KSTACKSIZE          (KSTACKPAGE * PGSIZE)      // 内核栈的大小
 
-#define USERTOP             0x80000000
-#define USTACKTOP           USERTOP
-#define USTACKPAGE          256                         // # of pages in user stack
-#define USTACKSIZE          (USTACKPAGE * PGSIZE)       // sizeof user stack
+#define USERTOP             0x80000000    // 用户空间的顶部
+#define USTACKTOP           USERTOP       // 用户栈顶（与 USERTOP 相同）
+#define USTACKPAGE          256           // 用户栈的页面数
+#define USTACKSIZE          (USTACKPAGE * PGSIZE)    // 用户栈的大小
 
-#define USERBASE            0x00200000
-#define UTEXT               0x00800000                  // where user programs generally begin
-#define USTAB               USERBASE                    // the location of the user STABS data structure
+#define USERBASE            0x00200000    // 用户空间基地址
+#define UTEXT               0x00800000    // 用户程序的起始地址
+#define USTAB               USERBASE      // 用户 STABS 数据结构的存储位置
 
 #define USER_ACCESS(start, end)                     \
-(USERBASE <= (start) && (start) < (end) && (end) <= USERTOP)
+(USERBASE <= (start) && (start) < (end) && (end) <= USERTOP)  // 判断内存区间是否属于用户空间
 
 #define KERN_ACCESS(start, end)                     \
-(KERNBASE <= (start) && (start) < (end) && (end) <= KERNTOP)
+(KERNBASE <= (start) && (start) < (end) && (end) <= KERNTOP)  // 判断内存区间是否属于内核空间
 
 #ifndef __ASSEMBLER__
 
@@ -83,44 +80,45 @@
 #include <atomic.h>
 #include <list.h>
 
-typedef uintptr_t pte_t;
-typedef uintptr_t pde_t;
-typedef pte_t swap_entry_t; //the pte can also be a swap entry
+typedef uintptr_t pte_t;  // 页面表项类型
+typedef uintptr_t pde_t;  // 页目录项类型
+typedef pte_t swap_entry_t;  // 页表项也可作为交换区条目
 
 /* *
- * struct Page - Page descriptor structures. Each Page describes one
- * physical page. In kern/mm/pmm.h, you can find lots of useful functions
- * that convert Page to other data types, such as physical address.
+ * struct Page - 页面描述符结构。每个页面描述一个物理页面。
+ * 在 kern/mm/pmm.h 中，你可以找到将 Page 转换为其他数据类型的有用函数，
+ * 例如物理地址。
  * */
 struct Page {
-    int ref;                        // page frame's reference counter
-    uint64_t flags;                 // array of flags that describe the status of the page frame
-    unsigned int property;          // the num of free block, used in first fit pm manager
-    list_entry_t page_link;         // free list link
-    list_entry_t pra_page_link;     // used for pra (page replace algorithm)
-    uintptr_t pra_vaddr;            // used for pra (page replace algorithm)
+    int ref;                        // 页面帧的引用计数
+    uint64_t flags;                 // 描述页面帧状态的标志位
+    unsigned int property;          // 空闲内存块的数量，供“首次适配”页面管理使用
+    list_entry_t page_link;         // 空闲链表的链接
+    list_entry_t pra_page_link;     // 用于页面替换算法的链接
+    uintptr_t pra_vaddr;            // 用于页面替换算法的虚拟地址
 };
 
-/* Flags describing the status of a page frame */
-#define PG_reserved                 0       // if this bit=1: the Page is reserved for kernel, cannot be used in alloc/free_pages; otherwise, this bit=0 
-#define PG_property                 1       // if this bit=1: the Page is the head page of a free memory block(contains some continuous_addrress pages), and can be used in alloc_pages; if this bit=0: if the Page is the the head page of a free memory block, then this Page and the memory block is alloced. Or this Page isn't the head page.
+/* 页面帧状态标志位 */
+#define PG_reserved                 0       // 如果该位为1，表示页面保留给内核，不能被分配或释放；否则为0
+#define PG_property                 1       // 如果该位为1，表示该页面为自由内存块的头页面，可用于分配；否则为0
 
-#define SetPageReserved(page)       set_bit(PG_reserved, &((page)->flags))
-#define ClearPageReserved(page)     clear_bit(PG_reserved, &((page)->flags))
-#define PageReserved(page)          test_bit(PG_reserved, &((page)->flags))
-#define SetPageProperty(page)       set_bit(PG_property, &((page)->flags))
-#define ClearPageProperty(page)     clear_bit(PG_property, &((page)->flags))
-#define PageProperty(page)          test_bit(PG_property, &((page)->flags))
+#define SetPageReserved(page)       set_bit(PG_reserved, &((page)->flags))  // 设置页面为保留状态
+#define ClearPageReserved(page)     clear_bit(PG_reserved, &((page)->flags))  // 清除页面的保留状态
+#define PageReserved(page)          test_bit(PG_reserved, &((page)->flags))  // 检查页面是否为保留状态
+#define SetPageProperty(page)       set_bit(PG_property, &((page)->flags))  // 设置页面的属性状态
+#define ClearPageProperty(page)     clear_bit(PG_property, &((page)->flags))  // 清除页面的属性状态
+#define PageProperty(page)          test_bit(PG_property, &((page)->flags))  // 检查页面的属性状态
 
-// convert list entry to page
+// 将链表条目转换为页面结构体
 #define le2page(le, member)                 \
     to_struct((le), struct Page, member)
 
-/* free_area_t - maintains a doubly linked list to record free (unused) pages */
+/* free_area_t - 维护一个双向链表，用于记录空闲（未使用）页面 */
 typedef struct {
-    list_entry_t free_list;         // the list header
-    unsigned int nr_free;           // # of free pages in this free list
+    list_entry_t free_list;         // 空闲链表头
+    unsigned int nr_free;           // 该链表中空闲页面的数量
 } free_area_t;
+
 
 
 #endif /* !__ASSEMBLER__ */
