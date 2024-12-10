@@ -94,7 +94,7 @@
     # restore sp last
     LOAD  x2,2*REGBYTES(sp)
     .endm
-
+ 
     .globl __alltraps
 __alltraps:
     SAVE_ALL
